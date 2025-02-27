@@ -35,3 +35,7 @@ class UseCase(Protocol):
     @transaction.atomic()
     def _execute(self, request: UseCaseRequest) -> UseCaseResponse:
         raise NotImplementedError()
+
+    def _log_event(self, object: Model):
+        raise NotImplementedError
+    

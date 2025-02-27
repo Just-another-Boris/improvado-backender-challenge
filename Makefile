@@ -1,5 +1,5 @@
 run:
-	docker compose up
+	docker compose up -d 
 install:
 	make migrations
 	make migrate
@@ -11,7 +11,7 @@ migrate:
 superuser:
 	docker compose exec app bash -c "python manage.py createsuperuser"
 shell:
-	docker compose run --rm app shell
+	docker compose run --rm app /bin/bash
 lint:
 	docker compose run --rm app ruff check --fix
 test:

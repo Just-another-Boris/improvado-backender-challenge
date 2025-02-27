@@ -21,3 +21,4 @@ class TimeStampedModel(models.Model):
             update_fields.add('updated_at')
 
         super().save(force_insert, force_update, using, update_fields)
+

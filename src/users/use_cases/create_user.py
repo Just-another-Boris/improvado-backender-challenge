@@ -1,11 +1,15 @@
-from typing import Any
+from typing import Any, Type
 
+from django.conf import settings
+from sentry_sdk import capture_exception
 import structlog
 
 from core.base_model import Model
-from core.event_log_client import EventLogClient
 from core.use_case import UseCase, UseCaseRequest, UseCaseResponse
+from outbox.services import BaseOutboxService
 from users.models import User
+from django.db import transaction
+from core.utils import get_class_by_full_path
 
 logger = structlog.get_logger(__name__)
 
@@ -28,6 +32,15 @@ class CreateUserResponse(UseCaseResponse):
 
 
 class CreateUser(UseCase):
+    def __init__(
+        self, outbox_service: Type[BaseOutboxService] | None = None, *args, **kwargs
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.outbox_service = (
+            outbox_service 
+            or get_class_by_full_path(settings.OUTBOX_DEFAULT_SERVICE_CLASS)
+        )
+        
     def _get_context_vars(self, request: UseCaseRequest) -> dict[str, Any]:
         return {
             'email': request.email,
@@ -37,31 +50,30 @@ class CreateUser(UseCase):
 
     def _execute(self, request: CreateUserRequest) -> CreateUserResponse:
         logger.info('creating a new user')
+        
+        try:
+            with transaction.atomic():
+                user, created = User.objects.get_or_create(
+                    email=request.email,
+                    defaults={
+                        'first_name': request.first_name, 'last_name': request.last_name,
+                    },
+                )
 
-        user, created = User.objects.get_or_create(
-            email=request.email,
-            defaults={
-                'first_name': request.first_name, 'last_name': request.last_name,
-            },
-        )
+                if created:
+                    logger.info('user has been created')
+                    self._log_event(user)
+                    return CreateUserResponse(result=user)
+        except Exception as e:
+            logger.error(f'Error occurred. Transaction rolled back.', error=str(e))
+            capture_exception(e)
+            raise e
+        
+        logger.error(f'Unable to create a new user with emal {request.email}')
+        return CreateUserResponse(error=f'User with this email already exists')
 
-        if created:
-            logger.info('user has been created')
-            self._log(user)
-            return CreateUserResponse(result=user)
+    def _log_event(self, user: User) -> None:
+        event = UserCreated.model_validate(user)
+        self.outbox_service().save_events(event)
 
-        logger.error('unable to create a new user')
-        return CreateUserResponse(error='User with this email already exists')
-
-    def _log(self, user: User) -> None:
-        with EventLogClient.init() as client:
-            client.insert(
-                data=[
-                    UserCreated(
-                        email=user.email,
-                        first_name=user.first_name,
-                        last_name=user.last_name,
-                    ),
-                ],
-            )
-
+        
