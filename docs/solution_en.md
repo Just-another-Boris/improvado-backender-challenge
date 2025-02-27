@@ -1,6 +1,6 @@
 ### Solution notes
 
-In my opinion, based on [restrictions and requirements]() the most suitable solution should include the following obvious points:
+In my opinion, based on [restrictions and requirements](task_en.md) the most suitable solution should include the following obvious points:
 
 - business logic and event logging for a particular usecase should be interpreted as an all-or-nothing operation - they happen in a scope of one transaction.
 - event publishing should be delegated to a separate service - no such a logic inside the usecase.
@@ -36,5 +36,8 @@ It takes 3 steps for any usecase to integrate with the event logging mechanism:
 - implement its _log_event method in the way it calls the outbox service's save_event method 
 - place _log_event call along with the core logic inside one transaction
 
-communication between components diagram:
+
+Here is a communication between components diagram: 
+
+![components-communication-diagram](images/components-communication-diagram.png)
 
