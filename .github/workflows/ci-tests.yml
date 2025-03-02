@@ -1,0 +1,65 @@
+name: CI - Run Tests
+
+on: [push, pull_request]
+
+env:
+  DEBUG: true
+  POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+  POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+  DATABASE_USER: ${{ secrets.DATABASE_USER }}
+  DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+  DATABASE_NAME: test_database
+  ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
+  SECRET_KEY: ${{ secrets.SECRET_KEY }}
+  STATIC_URL: "/static/"
+  STATIC_ROOT: "static/"
+  MEDIA_URL: "/media/"
+  MEDIA_ROOT: "media/"
+  REDIS_URL: ${{ secrets.REDIS_URL }}
+  CELERY_ALWAYS_EAGER: true
+  CELERY_BROKER_URL: ${REDIS_URL}
+  CELERY_RESULT_BACKEND: ${REDIS_URL}
+  LOG_LEVEL: "DEBUG"
+  LOG_FORMATTER: "console"
+  SENTRY_CONFIG_DSN: ${{ secrets.SENTRY_CONFIG_DSN }}
+  SENTRY_CONFIG_ENVIRONMENT: "dev"
+  OUTBOX_MIGRATION_MIN_BATCH_SIZE: 1000
+  OUTBOX_MIGRATION_TASK_RUN_PERIOD_MINUTES: 30
+  CLICKHOUSE_TEST_SCHEMA_NAME: "test_db"
+  DEFAULT_EVENT_LOG_OLAP_DB: "clickhouse"
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Install Make
+        run: sudo apt-get update && sudo apt-get install -y make
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Cache Docker Images
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: docker-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            docker-${{ runner.os }}*
+      
+      - name: Cache Postgres data
+        uses: actions/cache@v3
+        with:
+          path: /var/lib/postgresql/data
+          key: pg-data-${{ runner.os }}-${{ github.sha }}
+          restore_keys: |
+            pg-data-${{ runner.os }}*
+
+      - name: Run Tests
+        run: make gh-ci-tests
+      

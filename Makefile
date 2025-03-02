@@ -1,18 +1,30 @@
+DOCKER_COMPOSE_FILE = ./docker-compose.yml
+
+
 run:
-	docker compose up -d 
-install:
+	docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build
+
+setup:
 	make migrations
 	make migrate
-	make superuser
+
 migrations:
-	docker compose exec app bash -c "python manage.py makemigrations"
+	docker compose -f ${DOCKER_COMPOSE_FILE} exec app /bin/bash -c "python /manage.py makemigrations"
+
 migrate:
-	docker compose exec app bash -c "python manage.py migrate"
+	docker compose -f ${DOCKER_COMPOSE_FILE} exec app /bin/bash -c "python /manage.py migrate"
+
 superuser:
-	docker compose exec app bash -c "python manage.py createsuperuser"
+	docker compose -f ${DOCKER_COMPOSE_FILE} exec app /bin/bash -c "python /manage.py createsuperuser"
+
 shell:
-	docker compose run --rm app /bin/bash
+	docker compose -f ${DOCKER_COMPOSE_FILE} run --rm app /bin/bash
+
 lint:
-	docker compose run --rm app ruff check --fix
+	docker compose -f ${DOCKER_COMPOSE_FILE} run --rm app ruff check --fix
+
 test:
-	docker compose run --rm app pytest -svv
+	docker compose -f ${DOCKER_COMPOSE_FILE} run --build --rm app pytest -svv
+
+gh-ci-tests
+	docker compose -f ${DOCKER_COMPOSE_FILE} run --build --rm app /bin/bash -c "./manage.py makemigrations && ./manage.py migrate && pytest -svv"
