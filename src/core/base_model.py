@@ -14,3 +14,4 @@ class Model(BaseModel):
         }
         allow_mutation = True
         keep_untouched = (cached_property,)
+        from_attributes = True

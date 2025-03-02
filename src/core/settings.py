@@ -3,7 +3,12 @@ from pathlib import Path
 
 import environ
 import sentry_sdk
+import sentry_sdk.integrations
+import sentry_sdk.integrations.celery
+import sentry_sdk.integrations.django
 import structlog
+from celery.schedules import crontab
+
 
 env = environ.Env(
     DEBUG=(bool, False),
@@ -20,17 +25,25 @@ SECRET_KEY = env("SECRET_KEY")
 
 ALLOWED_HOSTS = ["*"]
 
-INSTALLED_APPS = [
+DJANGO_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
-    # project apps
-    'users',
 ]
+
+THIRD_PARTY_APPS = [
+
+]
+
+PROJECT_APPS = [
+    'users',
+    'outbox',
+]
+
+INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + PROJECT_APPS
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -63,7 +76,14 @@ TEMPLATES = [
 WSGI_APPLICATION = 'core.wsgi.application'
 
 DATABASES = {
-    "default": env.db("DATABASE_URL"),
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': env('DATABASE_NAME', default='test_database'),
+        'USER': env('DATABASE_USER', default='test_user'),
+        'PASSWORD': env('DATABASE_PASSWORD', default='123456'),
+        'HOST': env('POSTGRES_HOST', default='db'),
+        'PORT': env('POSTGRES_PORT', default='5432')
+    }
 }
 
 CLICKHOUSE_HOST = env('CLICKHOUSE_HOST', default='clickhouse')
@@ -77,6 +97,8 @@ CLICKHOUSE_URI = (
     f'{CLICKHOUSE_PROTOCOL}'
 )
 CLICKHOUSE_EVENT_LOG_TABLE_NAME = 'event_log'
+CLICKHOUSE_TEST_SCHEMA_NAME = env('CLICKHOUSE_TEST_SCHEMA_NAME', default='test_db')
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -110,8 +132,16 @@ STATIC_ROOT = env("STATIC_ROOT")
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CELERY_BROKER = env("CELERY_BROKER", default="redis://localhost:6379/0")
-CELERY_ALWAYS_EAGER = env("CELERY_ALWAYS_EAGER", default=DEBUG)
+CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_ALWAYS_EAGER = env.bool('CELERY_ALWAYS_EAGER', default=DEBUG)
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND')
+
+CELERY_BEAT_SCHEDULE = {
+    'migrate_outbox_to_olap_database': {
+        'task': 'outbox.tasks.migrate_outbox_to_olap_database',
+        'schedule': crontab(minute=f'*/{env('OUTBOX_MIGRATION_TASK_RUN_PERIOD_MINUTES')}')
+    },
+}
 
 LOG_FORMATTER = env("LOG_FORMATTER", default="console")
 LOG_LEVEL = env("LOG_LEVEL", default="INFO")
@@ -170,17 +200,41 @@ structlog.configure(
 )
 
 SENTRY_SETTINGS = {
-    "dsn": env("SENTRY_CONFIG_DSN"),
-    "environment": env("SENTRY_CONFIG_ENVIRONMENT"),
+    'dsn': env('SENTRY_CONFIG_DSN'),
+    'environment': env('SENTRY_CONFIG_ENVIRONMENT'),
+    'integrations': [
+        sentry_sdk.integrations.django.DjangoIntegration(),
+        sentry_sdk.integrations.celery.CeleryIntegration(),
+    ],
+    'default_integrations': False,
+    'send_default_pii': True,
+    'traces_sample_rate': 1.0,
 }
 
-if SENTRY_SETTINGS.get("dsn") and not DEBUG:
-    sentry_sdk.init(
-        dsn=SENTRY_SETTINGS["dsn"],
-        environment=SENTRY_SETTINGS["environment"],
-        integrations=[
-            sentry_sdk.DjangoIntegration(),
-            sentry_sdk.CeleryIntegration(),
-        ],
-        default_integrations=False,
-    )
+if not env('SENTRY_CONFIG_DSN') and DEBUG:
+    SENTRY_SETTINGS.update({
+        'dsn': None,
+        'debug': True,
+    })
+
+sentry_sdk.init(**SENTRY_SETTINGS)
+
+DEFAULT_EVENT_LOG_OLAP_DB = env('DEFAULT_EVENT_LOG_OLAP_DB', default='clickhouse')
+
+OUTBOX_MIGRATION_MIN_BATCH_SIZE = env('OUTBOX_MIGRATION_MIN_BATCH_SIZE', default=1000)
+
+OUTBOX_SERVICE_CLASS_MAP = {
+    'clickhouse': 'outbox.services.ClickHouseOutboxService',
+}
+
+OUTBOX_DEFAULT_SERVICE_CLASS = (
+    OUTBOX_SERVICE_CLASS_MAP.get(DEFAULT_EVENT_LOG_OLAP_DB)
+)
+
+OUTBOX_EVENT_LOG_CLIENT_CLASS_MAP = {
+    'clickhouse': 'outbox.clients.ClickHouseEventLogClient',
+}
+
+OUTBOX_DEFAULT_EVENT_LOG_CLIENT_CLASS = (
+    OUTBOX_EVENT_LOG_CLIENT_CLASS_MAP.get(DEFAULT_EVENT_LOG_OLAP_DB)
+)
