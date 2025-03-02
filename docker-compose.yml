@@ -13,7 +13,8 @@ services:
         condition: service_healthy
     command: [ "../docker/wait-for-it.sh", "db:5432", "--", "python", "manage.py", "runserver", "0.0.0.0:8000" ]
     env_file:
-      - ./src/core/.env
+      path: ./src/core/.env
+      required: false
     ports:
       - 8000:8000
     volumes:
@@ -34,7 +35,8 @@ services:
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DATABASE_NAME: ${DATABASE_NAME}
     env_file:
-      - ./src/core/.env
+      path: ./src/core/.env
+      required: false
     ports:
       - 5432:5432
     healthcheck:
@@ -74,7 +76,8 @@ services:
       dockerfile: ./Dockerfile
     command: celery -A core worker -l info 
     env_file:
-      - ./src/core/.env
+      path: ./src/core/.env
+      required: false
     depends_on:
       - app
       - redis
@@ -86,7 +89,8 @@ services:
       dockerfile: ./Dockerfile
     command: celery -A core beat -l info 
     env_file:
-      - ./src/core/.env
+      path: ./src/core/.env
+      required: false
     depends_on:
       - app
       - redis
