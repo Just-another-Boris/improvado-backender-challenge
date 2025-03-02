@@ -26,5 +26,5 @@ lint:
 test:
 	docker compose -f ${DOCKER_COMPOSE_FILE} run --build --rm app pytest -svv
 
-gh-ci-tests
+gh-ci-tests:
 	docker compose -f ${DOCKER_COMPOSE_FILE} run --build --rm app /bin/bash -c "./manage.py makemigrations && ./manage.py migrate && pytest -svv"
