@@ -20,8 +20,8 @@ env:
   MEDIA_ROOT: "media/"
   REDIS_URL: ${{ secrets.REDIS_URL }}
   CELERY_ALWAYS_EAGER: true
-  CELERY_BROKER_URL: ${{ env.REDIS_URL }}
-  CELERY_RESULT_BACKEND: ${{ env.REDIS_URL }}
+  CELERY_BROKER_URL: ${{ secrets.REDIS_URL }}
+  CELERY_RESULT_BACKEND: ${{ secrets.REDIS_URL }}
   LOG_LEVEL: "DEBUG"
   LOG_FORMATTER: "console"
   SENTRY_CONFIG_DSN: ${{ secrets.SENTRY_CONFIG_DSN }}
